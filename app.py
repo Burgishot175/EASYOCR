@@ -81,4 +81,30 @@ if uploaded_file:
     st.image(img)
     
     try:
-        reader = load_
+        # 1. Зареждаме OCR модела
+        reader = load_ocr()
+        
+        # 2. Изпълняваме разпознаването на текст
+        with st.spinner("Анализиране на съставките..."):
+            result = reader.readtext(np.array(img), detail=0)
+            text_e, text_w = normalize_text(result)
+            
+            # 3. Търсене на вредни съставки
+            found_hazards = []
+            full_text = text_e + " " + text_w
+            
+            for key, description in INGREDIENT_DATABASE.items():
+                if key in full_text:
+                    found_hazards.append(f"**{key}**: {description}")
+            
+            # 4. Показване на резултатите
+            st.subheader("Резултати от анализа:")
+            if found_hazards:
+                st.error(f"Внимание! Открити са {len(found_hazards)} потенциално вредни съставки:")
+                for hazard in found_hazards:
+                    st.write(hazard)
+            else:
+                st.success("Не бяха открити опасни съставки от базата данни.")
+                
+    except Exception as e:
+        st.error(f"Грешка при обработката: {e}")
