@@ -1,81 +1,87 @@
-import streamlit as st
-import easyocr
+import re
 import numpy as np
+import pandas as pd
+import streamlit as st
 from PIL import Image
+import easyocr
 
-# Конфигурация на страницата
-st.set_page_config(page_title="Скенер за вредни съставки", page_icon="🔍")
+st.set_page_config(
+    page_title="Food Ingredient Scanner",
+    page_icon="🧪",
+    layout="centered"
+)
 
-# Инициализиране на OCR четеца (кешираме го, за да не се зарежда при всяко кликване)
+# -------------------------------------------------
+# OCR Reader
+# -------------------------------------------------
 @st.cache_resource
+
 def load_reader():
-    return easyocr.Reader(['bg', 'en'])
+    return easyocr.Reader(['bg', 'en'], gpu=False)
 
 reader = load_reader()
 
-# Списък с вредни съставки (може да се разширява)
-HARMFUL_INGREDIENTS = {
-    "E621": "Мононатриев глутамат (Monosodium Glutamate) - усилвател на вкуса.",
-    "ПАЛМОВО МАСЛО": "Палмово масло (Palm Oil) - високо съдържание на наситени мазнини.",
-    "PALM OIL": "Палмово масло (Palm Oil) - високо съдържание на наситени мазнини.",
-    "E250": "Натриев нитрит - консервант в колбасите.",
-    "АСПАРТАМ": "Изкуствен подсладител (Aspartame).",
-    "ASPARTAME": "Изкуствен подсладител (Aspartame).",
-    "ФРУКТОЗЕН СИРОП": "Високофруктозен сироп от царевица (HFCS).",
-    "FRUCTOSE SYRUP": "Високофруктозен сироп от царевица (HFCS)."
+# -------------------------------------------------
+# Harmful ingredients database
+# -------------------------------------------------
+harmful_ingredients = {
+    "e621": {
+        "name": "E621 (Monosodium Glutamate)",
+        "risk": "Flavor enhancer that may cause headaches or sensitivity in some people."
+    },
+    "msg": {
+        "name": "MSG",
+        "risk": "Artificial flavor enhancer."
+    },
+    "palm oil": {
+        "name": "Palm Oil",
+        "risk": "Highly processed fat linked to environmental and health concerns."
+    },
+    "палмово масло": {
+        "name": "Палмово масло",
+        "risk": "Силно преработена мазнина с потенциални здравословни рискове."
+    },
+    "e250": {
+        "name": "E250 (Sodium Nitrite)",
+        "risk": "Preservative associated with processed meats."
+    },
+    "e951": {
+        "name": "E951 (Aspartame)",
+        "risk": "Artificial sweetener that may not be suitable for everyone."
+    },
+    "high fructose corn syrup": {
+        "name": "High Fructose Corn Syrup",
+        "risk": "Highly processed sweetener."
+    },
+    "hydrogenated": {
+        "name": "Hydrogenated Oils",
+        "risk": "May contain trans fats."
+    },
+    "trans fat": {
+        "name": "Trans Fat",
+        "risk": "Associated with cardiovascular disease."
+    },
+    "e102": {
+        "name": "E102 (Tartrazine)",
+        "risk": "Artificial coloring that may cause hyperactivity in some children."
+    },
 }
 
-def process_image(image):
-    # Конвертиране на изображението за EasyOCR
-    img_array = np.array(image)
-    with st.spinner('Анализиране на текста...'):
-        results = reader.readtext(img_array, detail=0)
-    return results
+# -------------------------------------------------
+# Functions
+# -------------------------------------------------
+def extract_text(image):
+    image_np = np.array(image)
+    results = reader.readtext(image_np, detail=0)
+    text = " ".join(results)
+    return text
 
-def check_ingredients(text_list):
+
+def find_harmful_ingredients(text):
     found = []
-    full_text = " ".join(text_list).upper()
-    
-    for ingredient, description in HARMFUL_INGREDIENTS.items():
-        if ingredient in full_text:
-            found.append(description)
-    return found
+    lower_text = text.lower()
 
-# --- ИНТЕРФЕЙС ---
-st.title("🔍 Скенер за вредни съставки")
-st.write("Качете снимка на етикета със съдържанието, за да проверите за опасни добавки.")
+    for ingredient, info in harmful_ingredients.items():
+        pattern = re.escape(ingredient.lower())
 
-tab1, tab2 = st.tabs(["📁 Качване на файл", "📸 Камера"])
-
-uploaded_file = None
-
-with tab1:
-    file_upload = st.file_uploader("Изберете снимка...", type=["jpg", "jpeg", "png"])
-    if file_upload:
-        uploaded_file = file_upload
-
-with tab2:
-    camera_photo = st.camera_input("Направете снимка на етикета")
-    if camera_photo:
-        uploaded_file = camera_photo
-
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption='Вашата снимка', use_column_width=True)
-    
-    if st.button("Провери съставките"):
-        extracted_text = process_image(image)
-        
-        st.subheader("Разпознат текст:")
-        st.write(", ".join(extracted_text))
-        
-        st.divider()
-        
-        harmful_found = check_ingredients(extracted_text)
-        
-        if harmful_found:
-            st.error("⚠️ Внимание! Намерени са потенциално вредни съставки:")
-            for item in harmful_found:
-                st.write(f"- {item}")
-        else:
-            st.success("✅ Не бяха открити съставки от черния списък.")
+st.caption("Supports Bulgarian and English OCR using EasyOCR")
