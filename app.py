@@ -74,4 +74,11 @@ def normalize_text(text_list):
 st.title("🛡️ Скенер за съставки")
 uploaded_file = st.file_uploader("Качете снимка на етикет", type=["jpg", "png", "jpeg"])
 
-
+if uploaded_file:
+    img = Image.open(uploaded_file).convert('RGB')
+    # Мащабиране за избягване на 502 грешка
+    img.thumbnail((1000, 1000))
+    st.image(img)
+    
+    try:
+        reader = load_
