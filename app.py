@@ -67,17 +67,22 @@ def load_ocr():
     return easyocr.Reader(['bg', 'en'], gpu=False)
 
 def normalize_text(text_list):
-    raw = " ".join(text_list).upper()
-    # Обработка на Е-номера и символи
-    t_e = raw.replace("Е", "E").replace("€", "E").replace("I", "1").replace("L", "1")
-    t_e = re.sub(r'(?<=E\d)O|O(?=\d)', '0', t_e)
+    # Обединяваме всичко в един низ и махаме интервалите
+    raw = "".join(text_list).upper().replace(" ", "")
     
-    # Смяна на латински с кирилски букви (визуална прилика)
-    caps = {'A': 'А', 'B': 'В', 'E': 'Е', 'K': 'К', 'M': 'М', 'H': 'Н', 'O': 'О', 'P': 'Р', 'C': 'С', 'T': 'Т', 'X': 'Х', 'Y': 'У'}
-    t_w = raw
-    for lat, cyr in caps.items():
-        t_w = t_w.replace(lat, cyr)
-    return t_e, t_w
+    # Сменяме визуално еднакви символи, за да улесним засичането
+    replacements = {
+        "Е": "E", "€": "E", "3": "E", # Кирилско Е -> Латинско E
+        "О": "0", "O": "0",           # Буква О -> Цифра 0
+        "І": "1", "L": "1", "I": "1", # Различни символи -> 1
+        "А": "A", "В": "B", "К": "K", "М": "M", "Н": "H", "Р": "P", "С": "C", "Т": "T", "Х": "X"
+    }
+    
+    normalized = raw
+    for old, new in replacements.items():
+        normalized = normalized.replace(old, new)
+        
+    return normalized
 
 st.title("🛡️ Скенер за съставки")
 uploaded_file = st.file_uploader("Качете снимка на етикет", type=["jpg", "png", "jpeg"])
@@ -90,28 +95,20 @@ if uploaded_file:
     
     try:
         reader = load_ocr()
-        with st.spinner("Анализиране на съставките и рисковете..."):
+        with st.spinner("Анализиране..."):
             result = reader.readtext(np.array(img), detail=0)
-            text_e, text_w = normalize_text(result)
-            full_text = (text_e + " " + text_w).upper()
+            
+            # Генерираме "чист" текст без интервали и със стандартизирани букви
+            clean_text = normalize_text(result)
             
             found_any = False
-            st.header("🔍 Резултат от анализа")
-            
             for key, info in INGREDIENT_DATABASE.items():
-                if key in full_text:
+                # Нормализираме и самия ключ от базата данни за всеки случай
+                normalized_key = key.upper().replace(" ", "").replace("Е", "E")
+                
+                if normalized_key in clean_text:
                     found_any = True
-                    # Използваме червено за заглавието при открит проблем
-                    with st.expander(f"⚠️ ВНИМАНИЕ: {key}", expanded=True):
-                        st.markdown(f"### 🩺 Здравословен проблем:\n**{info['problem']}**")
-                        st.write(f"ℹ️ **Защо е опасно:** {info['desc']}")
-                        st.success(f"💡 **По-добра алтернатива:** {info['alt']}")
-            
-            if not found_any:
-                st.balloons()
-                st.success("✅ Чист продукт! Не бяха открити опасни съставки от нашата база данни.")
-            else:
-                st.error("Препоръчително е да не консумирате този продукт редовно.")
-    
-    except Exception as e:
-        st.error(f"Грешка при обработката на изображението: {e}")
+                    with st.expander(f"⚠️ ВНИМАНИЕ: {key}"):
+                        st.markdown(f"### 🩺 {info['problem']}")
+                        st.write(f"ℹ️ {info['desc']}")
+                        st.success(f"💡 {info['alt']}")
