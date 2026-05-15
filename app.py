@@ -15,11 +15,15 @@ st.set_page_config(
 # OCR Reader
 # -------------------------------------------------
 @st.cache_resource
-
 def load_reader():
-    return easyocr.Reader(['bg', 'en'], gpu=False)
+    return easyocr.Reader(
+        ['bg', 'en'],
+        gpu=False,
+        download_enabled=True
+    )
 
-reader = load_reader()
+with st.spinner("Loading OCR models... Please wait..."):
+    reader = load_reader()
 
 # -------------------------------------------------
 # Harmful ingredients database
