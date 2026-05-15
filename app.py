@@ -57,30 +57,33 @@ if uploaded_file:
     st.image(img)
     
     try:
-        # 1. Зареждаме OCR модела
-        reader = load_ocr()
+    reader = load_ocr()
+    with st.spinner("Анализиране на етикета..."):
+        result = reader.readtext(np.array(img), detail=0)
+        text_e, text_w = normalize_text(result)
+        full_text = (text_e + " " + text_w).upper()
         
-        # 2. Изпълняваме разпознаването на текст
-        with st.spinner("Анализиране на съставките..."):
-            result = reader.readtext(np.array(img), detail=0)
-            text_e, text_w = normalize_text(result)
+        found_any = False
+        st.subheader("📋 Резултати от проверката")
+        
+        # Списъци за събиране на намерените елементи
+        hazards_found = []
+        
+        for key, info in INGREDIENT_DATABASE.items():
+            if key in full_text:
+                hazards_found.append((key, info))
+                found_any = True
+
+        if found_any:
+            for key, info in hazards_found:
+                # Използваме expander, за да не заема много място
+                with st.expander(f"⚠️ Открита съставка: {key}", expanded=True):
+                    st.write(f"🔍 **Описание:** {info['desc']}")
+                    st.info(f"💡 **Препоръка:** {info['alt']}")
             
-            # 3. Търсене на вредни съставки
-            found_hazards = []
-            full_text = text_e + " " + text_w
-            
-            for key, description in INGREDIENT_DATABASE.items():
-                if key in full_text:
-                    found_hazards.append(f"**{key}**: {description}")
-            
-            # 4. Показване на резултатите
-            st.subheader("Резултати от анализа:")
-            if found_hazards:
-                st.error(f"Внимание! Открити са {len(found_hazards)} потенциално вредни съставки:")
-                for hazard in found_hazards:
-                    st.write(hazard)
-            else:
-                st.success("Не бяха открити опасни съставки от базата данни.")
-                
-    except Exception as e:
-        st.error(f"Грешка при обработката: {e}")
+            st.warning("Препоръчваме да потърсите по-чиста алтернатива на този продукт.")
+        else:
+            st.success("✅ Не бяха открити опасни съставки от нашата база данни. Продуктът изглежда добър!")
+
+except Exception as e:
+    st.error(f"Възникна грешка при четенето: {e}")
