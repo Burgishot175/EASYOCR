@@ -1,4 +1,66 @@
 import re
+import numpy as np
+import pandas as pd
+import streamlit as st
+from PIL import Image
+import easyocr
+
+st.set_page_config(
+    page_title="Food Ingredient Scanner",
+    page_icon="🧪",
+    layout="centered"
+)
+
+# -------------------------------------------------
+# OCR Reader
+# -------------------------------------------------
+@st.cache_resource
+
+def load_reader():
+    return easyocr.Reader(['bg', 'en'], gpu=False)
+
+reader = load_reader()
+
+# -------------------------------------------------
+# Harmful ingredients database
+# -------------------------------------------------
+harmful_ingredients = {
+    "e621": {
+        "name": "E621 (Monosodium Glutamate)",
+        "risk": "Flavor enhancer that may cause headaches or sensitivity in some people."
+    },
+    "msg": {
+        "name": "MSG",
+        "risk": "Artificial flavor enhancer."
+    },
+    "palm oil": {
+        "name": "Palm Oil",
+        "risk": "Highly processed fat linked to environmental and health concerns."
+    },
+    "палмово масло": {
+        "name": "Палмово масло",
+        "risk": "Силно преработена мазнина с потенциални здравословни рискове."
+    },
+    "e250": {
+        "name": "E250 (Sodium Nitrite)",
+        "risk": "Preservative associated with processed meats."
+    },
+    "e951": {
+        "name": "E951 (Aspartame)",
+        "risk": "Artificial sweetener that may not be suitable for everyone."
+    },
+    "high fructose corn syrup": {
+        "name": "High Fructose Corn Syrup",
+        "risk": "Highly processed sweetener."
+    },
+    "hydrogenated": {
+        "name": "Hydrogenated Oils",
+        "risk": "May contain trans fats."
+    },
+    "trans fat": {
+        "name": "Trans Fat",
+        "risk": "Associated with cardiovascular disease."
+    },
     "e102": {
         "name": "E102 (Tartrazine)",
         "risk": "Artificial coloring that may cause hyperactivity in some children."
@@ -18,66 +80,4 @@ def extract_text(image):
 def find_harmful_ingredients(text):
     found = []
     lower_text = text.lower()
-
-    for ingredient, info in harmful_ingredients.items():
-        pattern = re.escape(ingredient.lower())
-
-        if re.search(pattern, lower_text):
-            found.append({
-                "Ingredient": info["name"],
-                "Risk": info["risk"]
-            })
-
-    return found
-
-# -------------------------------------------------
-# UI
-# -------------------------------------------------
-st.title("🧪 Food Ingredient Scanner")
-st.write("Upload or take a photo of food ingredients and detect potentially harmful additives.")
-
-st.subheader("📤 Upload Image")
-uploaded_file = st.file_uploader(
-    "Choose an image",
-    type=["jpg", "jpeg", "png"]
-)
-
-st.subheader("📸 Camera Capture")
-camera_image = st.camera_input("Take a picture")
-
-image = None
-
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-
-elif camera_image is not None:
-    image = Image.open(camera_image)
-
-if image is not None:
-    st.image(image, caption="Selected Image", use_container_width=True)
-
-    with st.spinner("Reading text with OCR..."):
-        extracted_text = extract_text(image)
-
-    st.subheader("📝 Extracted Text")
-    st.text_area("OCR Result", extracted_text, height=200)
-
-    harmful_found = find_harmful_ingredients(extracted_text)
-
-    st.subheader("⚠️ Detected Harmful Ingredients")
-
-    if harmful_found:
-        df = pd.DataFrame(harmful_found)
-        st.dataframe(df, use_container_width=True)
-
-        for item in harmful_found:
-            st.warning(f"{item['Ingredient']} → {item['Risk']}")
-
-    else:
-        st.success("No harmful ingredients detected.")
-
-# -------------------------------------------------
-# Footer
-# -------------------------------------------------
-st.markdown("---")
 st.caption("Supports Bulgarian and English OCR using EasyOCR")
