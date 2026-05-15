@@ -94,21 +94,44 @@ if uploaded_file:
     st.image(img)
     
     try:
+        # 1. Инициализиране на OCR
         reader = load_ocr()
-        with st.spinner("Анализиране..."):
-            result = reader.readtext(np.array(img), detail=0)
+        
+        with st.spinner("Анализиране на етикета..."):
+            # 2. Обработка на изображението
+            img_array = np.array(img)
+            result = reader.readtext(img_array, detail=0)
             
-            # Генерираме "чист" текст без интервали и със стандартизирани букви
-            clean_text = normalize_text(result)
+            # 3. Нормализиране на текста (Премахваме интервали и уеднаквяваме буквите)
+            raw_text = " ".join(result).upper()
+            # Стандартизираме Е-номерата и символите
+            clean_text = raw_text.replace(" ", "").replace("Е", "E").replace("3", "E")
             
+            # Показваме какво е разпознато (за дебъгване - можеш да го изтриеш по-късно)
+            # st.write("Разпознат текст:", clean_text) 
+
             found_any = False
+            st.subheader("📋 Резултати от анализа")
+
+            # 4. Проверка срещу базата данни
             for key, info in INGREDIENT_DATABASE.items():
-                # Нормализираме и самия ключ от базата данни за всеки случай
+                # Търсим ключа както в оригиналния текст, така и в изчистения
                 normalized_key = key.upper().replace(" ", "").replace("Е", "E")
                 
-                if normalized_key in clean_text:
+                if normalized_key in clean_text or key.upper() in raw_text:
                     found_any = True
-                    with st.expander(f"⚠️ ВНИМАНИЕ: {key}"):
-                        st.markdown(f"### 🩺 {info['problem']}")
-                        st.write(f"ℹ️ {info['desc']}")
-                        st.success(f"💡 {info['alt']}")
+                    with st.expander(f"⚠️ ВНИМАНИЕ: {key}", expanded=True):
+                        st.markdown(f"### 🩺 Проблем: {info['problem']}")
+                        st.write(f"ℹ️ **Защо е опасно:** {info['desc']}")
+                        st.info(f"💡 **Алтернатива:** {info['alt']}")
+
+            # 5. Краен изход
+            if not found_any:
+                st.balloons()
+                st.success("✅ Не бяха открити опасни съставки от базата данни. Продуктът изглежда чист!")
+            else:
+                st.warning("Внимание: Продуктът съдържа съставки, които могат да бъдат вредни при честа консумация.")
+
+    except Exception as e:
+        # ТОВА ЗАТВАРЯ TRY БЛОКА И ОПРАВЯ ГРЕШКАТА
+        st.error(
