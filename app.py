@@ -134,4 +134,4 @@ if uploaded_file:
 
     except Exception as e:
         # ТОВА ЗАТВАРЯ TRY БЛОКА И ОПРАВЯ ГРЕШКАТА
-        st.error(
+        st.error(f"Грешка при изпълнението на скрипта: {e}")
