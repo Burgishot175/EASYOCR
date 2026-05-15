@@ -1,83 +1,95 @@
-import re
-import numpy as np
-import pandas as pd
 import streamlit as st
-from PIL import Image
 import easyocr
+import numpy as np
+from PIL import Image
+import re
 
-st.set_page_config(
-    page_title="Food Ingredient Scanner",
-    page_icon="🧪",
-    layout="centered"
-)
+st.set_page_config(page_title="🛡️ Скенер за съставки", layout="centered")
 
-# -------------------------------------------------
-# OCR Reader
-# -------------------------------------------------
-@st.cache_resource
-
-def load_reader():
-    return easyocr.Reader(['bg', 'en'], gpu=False)
-
-reader = load_reader()
-
-# -------------------------------------------------
-# Harmful ingredients database
-# -------------------------------------------------
-harmful_ingredients = {
-    "e621": {
-        "name": "E621 (Monosodium Glutamate)",
-        "risk": "Flavor enhancer that may cause headaches or sensitivity in some people."
-    },
-    "msg": {
-        "name": "MSG",
-        "risk": "Artificial flavor enhancer."
-    },
-    "palm oil": {
-        "name": "Palm Oil",
-        "risk": "Highly processed fat linked to environmental and health concerns."
-    },
-    "палмово масло": {
-        "name": "Палмово масло",
-        "risk": "Силно преработена мазнина с потенциални здравословни рискове."
-    },
-    "e250": {
-        "name": "E250 (Sodium Nitrite)",
-        "risk": "Preservative associated with processed meats."
-    },
-    "e951": {
-        "name": "E951 (Aspartame)",
-        "risk": "Artificial sweetener that may not be suitable for everyone."
-    },
-    "high fructose corn syrup": {
-        "name": "High Fructose Corn Syrup",
-        "risk": "Highly processed sweetener."
-    },
-    "hydrogenated": {
-        "name": "Hydrogenated Oils",
-        "risk": "May contain trans fats."
-    },
-    "trans fat": {
-        "name": "Trans Fat",
-        "risk": "Associated with cardiovascular disease."
-    },
-    "e102": {
-        "name": "E102 (Tartrazine)",
-        "risk": "Artificial coloring that may cause hyperactivity in some children."
-    },
+# База данни с нормализирани ключове (на Кирилица и Латиница за Е-номерата)
+INGREDIENT_DATABASE = {
+    "E120": "Кармин/Кошенил - силен алерген от насекоми.",
+    "E316": "Натриев ериторбат - антиоксидант.",
+    "E407A": "Преработени морски водорасли Euchema - стабилизатор.",
+    "E412": "Гума гуар - сгъстител.",
+    "МАЛТОДЕКСТРИН": "Малтодекстрин - въглехидрат с много висок гликемичен индекс.",
+    "ПАЛМОВО": "Палмово масло/мазнина - високо съдържание на наситени мазнини.",
+    "ХИДРОГЕНИРАНИ": "Хидрогенирани мазнини - източник на транс-мазнини.",
+    "ЗАХАР": "Внимание: Съдържа захар.",
+    "ГЛУТАМАТ": "Мононатриев глутамат - овкусител.",
 }
 
-# -------------------------------------------------
-# Functions
-# -------------------------------------------------
-def extract_text(image):
-    image_np = np.array(image)
-    results = reader.readtext(image_np, detail=0)
-    text = " ".join(results)
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['bg', 'en'], gpu=False)
+
+reader = load_ocr()
+
+def normalize_to_cyrillic(text):
+    """ Превръща латински букви, които приличат на кирилски, в кирилски """
+    caps = {
+        'A': 'А', 'B': 'В', 'E': 'Е', 'K': 'К', 'M': 'М', 'H': 'Н', 
+        'O': 'О', 'P': 'Р', 'C': 'С', 'T': 'Т', 'X': 'Х', 'Y': 'У'
+    }
+    for lat, cyr in caps.items():
+        text = text.replace(lat, cyr)
     return text
 
+def process_text_and_find_ingredients(text_list):
+    # 1. Обединяваме и правим всичко в ГЛАВНИ букви
+    raw_text = " ".join(text_list).upper()
+    
+    # 2. Подготовка за Е-номера (Латиница)
+    text_for_e = raw_text.replace("Е", "E").replace("€", "E").replace("I", "1").replace("O", "0")
+    
+    # 3. Подготовка за думи (Кирилица)
+    # Нормализираме текста, за да хванем смесени букви (напр. МАЛТOдекстрин с латинско O)
+    text_for_words = normalize_to_cyrillic(raw_text)
+    
+    # Махаме интервалите, за да хванем "МАЛТО ДЕКСТРИН"
+    text_no_spaces = text_for_words.replace(" ", "")
 
-def find_harmful_ingredients(text):
-    found = []
-    lower_text = text.lower()
-st.caption("Supports Bulgarian and English OCR using EasyOCR")
+    found_results = {}
+
+    # --- Търсене на Е-номера (Regex) ---
+    e_pattern = re.compile(r'E\s*(\d+)([A-ZА-Я]?)')
+    e_matches = e_pattern.findall(text_for_e)
+    for match in e_matches:
+        code = "E" + match[0] + match[1]
+        if code in INGREDIENT_DATABASE:
+            found_results[code] = INGREDIENT_DATABASE[code]
+
+    # --- Търсене на думи (Кирилица) ---
+    for key, desc in INGREDIENT_DATABASE.items():
+        if not key.startswith("E"):
+            if key in text_for_words or key in text_no_spaces:
+                found_results[key] = desc
+
+    return found_results, text_for_words
+
+# --- Интерфейс ---
+st.title("🛡️ Професионален скенер за етикети")
+
+uploaded_file = st.file_uploader("Качете снимка на етикета...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    image = Image.open(uploaded_file)
+    st.image(image, use_container_width=True)
+    
+    with st.spinner('Анализирам всяка дума...'):
+        img_array = np.array(image)
+        results = reader.readtext(img_array, detail=0)
+        
+        found, debug_text = process_text_and_find_ingredients(results)
+
+        with st.expander("Виж разпознатия текст (пречистен)"):
+            st.write(debug_text)
+
+        st.divider()
+
+        if found:
+            st.warning("⚠️ Открити съставки:")
+            for item, desc in found.items():
+                st.write(f"- **{item}**: {desc}")
+        else:
+            st.success("✅ Не бяха открити критични съставки.")
