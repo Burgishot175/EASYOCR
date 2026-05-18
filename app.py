@@ -61,7 +61,7 @@ INGREDIENT_DATABASE = {
 
 @st.cache_resource
 def load_ocr():
-    return easyocr.Reader(['bg', 'en'], gpu=False)
+    return easyocr.Reader(['bg', 'en'], gpu=True)
 
 def normalize_text(text_list):
     full_text = " ".join(text_list).upper()
